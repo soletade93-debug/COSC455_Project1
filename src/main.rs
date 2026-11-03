@@ -1,14 +1,21 @@
-
+// This is the file where we wrote the lexer.
 mod lexer;
 
+// We need Lexer here so main can get tokens from the input.
 use lexer::Lexer;
+// HashMap is where we keep variable names and their values.
 use std::collections::HashMap;
+// Used to get the file name from the command line.
 use std::env;
+// We use this to read the .lol file and save the HTML file.
 use std::fs;
+// Helps us work with the input and output file paths.
 use std::path::Path;
+// Used later to open the HTML file in a browser.
 use std::process::Command;
 
-// Professor's Syntax Analyzer Trait - Option 2.
+//  Syntax Analyzer Trait - Option 2.
+// This is the SyntaxAnalyzer trait, i followd these function names in my parser.
 pub trait SyntaxAnalyzer {
     fn parse_lolcode(&mut self) -> Result<(), String>;
     fn parse_head(&mut self) -> Result<(), String>;
@@ -31,6 +38,7 @@ pub trait SyntaxAnalyzer {
 
 // Nodes represent the parsed contents of the source program.
 #[derive(Debug)]
+// These are the different kinds of content our parser can find.
 enum Node {
     Text(String),
     Comment(String),
@@ -42,6 +50,7 @@ enum Node {
     Newline,
 }
 
+// The parser keeps track of the tokens, where it is, variables, and the content it has read.
 struct Parser {
     tokens: Vec<String>,
     position: usize,
@@ -117,6 +126,7 @@ impl Parser {
     }
 
     fn get_variable(&self, name: &str) -> Result<String, String> {
+        // Start with the closest scope, since a local variable can replace an outer one.
         for scope in self.scopes.iter().rev() {
             if let Some(value) = scope.get(name) {
                 return Ok(value.clone());
@@ -199,6 +209,7 @@ impl Parser {
 
         let mut comment = String::new();
 
+        // Keep reading until we reach the end of the comment.
         while !self.is("#TLDR") {
             if self.position >= self.tokens.len() {
                 return Err(
@@ -483,36 +494,42 @@ impl Parser {
             match node {
                 Node::Text(text) => html.push_str(text),
 
+                // LOLCODE comments become HTML comments in the output.
                 Node::Comment(text) => {
                     html.push_str("<!--");
                     html.push_str(text);
                     html.push_str("-->");
                 }
 
+                // Add the paragraph tags around everything inside it.
                 Node::Paragraph(children) => {
                     html.push_str("<p>");
                     html.push_str(&Self::render_nodes(children));
                     html.push_str("</p>");
                 }
 
+                // Add the HTML tags that make this text bold.
                 Node::Bold(text) => {
                     html.push_str("<b>");
                     html.push_str(text);
                     html.push_str("</b>");
                 }
 
+                // Put the list items inside an HTML unordered list.
                 Node::List(items) => {
                     html.push_str("<ul>");
                     html.push_str(&Self::render_nodes(items));
                     html.push_str("</ul>");
                 }
 
+                // Each item gets its own li tags.
                 Node::Item(children) => {
                     html.push_str("<li>");
                     html.push_str(&Self::render_nodes(children));
                     html.push_str("</li>");
                 }
 
+                // The same address is used for the link and the text shown on the page.
                 Node::Link(address) => {
                     html.push_str("<a href=\"");
                     html.push_str(address);
@@ -539,6 +556,7 @@ impl Parser {
     }
 }
 
+// Here we fill in the functions listed in the professor's trait.
 impl SyntaxAnalyzer for Parser {
     fn parse_lolcode(&mut self) -> Result<(), String> {
         self.expect("#HAI")?;
@@ -667,10 +685,13 @@ impl SyntaxAnalyzer for Parser {
 }
 
 // Get all tokens from the lexer.
+// Get the tokens from the lexer so the parser can use them.
 fn tokenize(source: &str) -> Result<Vec<String>, String> {
+    // Start the lexer with the text we read from the file.
     let mut lexer = Lexer::new(source);
     let mut tokens = Vec::new();
 
+    // Keep getting tokens until there aren't any left.
     loop {
         match lexer.next_token_result()? {
             Some(token) => tokens.push(token),
@@ -682,6 +703,7 @@ fn tokenize(source: &str) -> Result<Vec<String>, String> {
 }
 
 // Open the generated HTML file in the default browser.
+// Try to open the HTML file with the computer's default browser.
 fn open_browser(file_path: &Path) {
     #[cfg(target_os = "windows")]
     {
@@ -707,6 +729,7 @@ fn open_browser(file_path: &Path) {
     }
 }
 
+// This function runs the compiler steps for the file we were given.
 fn compile_file(file_name: &str) -> Result<(), String> {
     let input_path = Path::new(file_name);
 
@@ -721,22 +744,28 @@ fn compile_file(file_name: &str) -> Result<(), String> {
 
     println!("Starting lexical analysis...");
 
+    // First break the source code into tokens.
     let tokens = tokenize(&source)?;
 
     println!("Lexical analysis completed.");
     println!("Starting syntax and semantic analysis...");
 
+    // Now pass those tokens to the parser.
     let mut parser = Parser::new(tokens);
 
+    // Check that the program follows the language rules.
     parser.parse_lolcode()?;
 
     println!("Syntax and semantic analysis completed.");
 
     // Create the HTML file only after all analysis succeeds.
+    // Only make the HTML after parsing finishes without an error.
     let html = parser.generate_html();
 
+    // Save the result using the same name, but with an .html extension.
     let output_path = input_path.with_extension("html");
 
+    // Write the HTML we just created to the new file.
     fs::write(&output_path, html)
         .map_err(|error| format!("Output file error: {}", error))?;
 
@@ -745,15 +774,18 @@ fn compile_file(file_name: &str) -> Result<(), String> {
         output_path.display()
     );
 
+    // Open the result so we can see the page in the browser.
     open_browser(&output_path);
 
     Ok(())
 }
 
+// Program starts here.
 fn main() {
     // Required project variable.
     let dolphin = "LOLCODE Markdown compiler";
 
+    // Get the arguments typed when starting the program.
     let arguments: Vec<String> = env::args().collect();
 
     if arguments.len() != 2 {
